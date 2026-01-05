@@ -25,7 +25,7 @@ async def handle_text_analysis(message: types.Message):
     found_urls = re.findall(URL_PATTERN, text)
     
     vt_stats = None
-    status_msg = await message.reply("Анализирую сообщение... 🕵️‍♂️")
+    status_msg = await message.reply("Проверяю текст и ссылки... 🕵️‍♂️")
 
     if found_urls:
         url_to_check = found_urls[0]
@@ -37,7 +37,7 @@ async def handle_text_analysis(message: types.Message):
             vt_stats = stats
             # Если много детектов, сразу предупреждаем (опционально)
             if stats.get("malicious", 0) > 0:
-                await status_msg.edit_text(f"⚠️ Найдена опасная ссылка! Проверяю контекст... 🤖")
+                await status_msg.edit_text(f"⚠️ Ссылка выглядит подозрительно! Изучаю детали... 🤖")
     
     # Отправляем текст и статистику VT (если есть) в ИИ
     ai_verdict = await ai_explainer.analyze_text(text, vt_stats)
