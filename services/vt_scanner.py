@@ -1,5 +1,6 @@
 import hashlib
 import base64
+import asyncio
 import aiohttp
 import logging
 from typing import Optional, Dict, Any
@@ -13,10 +14,9 @@ class VirusTotalScanner:
     """
 
     @staticmethod
-    def calculate_sha256(file_path: str) -> str:
+    def _calculate_sha256_sync(file_path: str) -> str:
         """
-        Вычисляет SHA256 хеш файла, читая его частями по 4096 байт.
-        Экономит оперативную память.
+        Синхронная версия хеширования (для запуска в executor).
         """
         sha256_hash = hashlib.sha256()
         try:
@@ -28,6 +28,14 @@ class VirusTotalScanner:
         except Exception as e:
             logger.error(f"Ошибка при хешировании файла {file_path}: {e}")
             raise e
+
+    async def calculate_sha256(self, file_path: str) -> str:
+        """
+        Асинхронная обертка для хеширования.
+        Запускает тяжелую задачу в отдельном потоке, не блокируя бота.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._calculate_sha256_sync, file_path)
 
     @staticmethod
     async def _make_request(url: str) -> Optional[Dict[str, Any]]:

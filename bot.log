@@ -1,0 +1,63 @@
+2026-01-05 19:47:14,127 - __main__ - INFO - Starting bot polling...
+2026-01-05 19:47:14,127 - aiogram.dispatcher - INFO - Start polling
+2026-01-05 19:47:14,922 - aiogram.dispatcher - INFO - Run polling for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:47:28,959 - aiogram.event - INFO - Update id=148157043 is handled. Duration 420 ms by bot id=8283776937
+2026-01-05 19:47:34,478 - aiogram.event - INFO - Update id=148157044 is handled. Duration 387 ms by bot id=8283776937
+2026-01-05 19:47:37,558 - aiogram.event - INFO - Update id=148157045 is handled. Duration 0 ms by bot id=8283776937
+2026-01-05 19:48:05,920 - aiogram.event - INFO - Update id=148157046 is handled. Duration 405 ms by bot id=8283776937
+2026-01-05 19:49:18,328 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-05 19:49:18,329 - aiogram.dispatcher - INFO - Polling stopped for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:49:18,329 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-05 19:49:21,913 - __main__ - INFO - Starting bot polling...
+2026-01-05 19:49:21,913 - aiogram.dispatcher - INFO - Start polling
+2026-01-05 19:49:22,723 - aiogram.dispatcher - INFO - Run polling for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:49:28,167 - aiogram.event - INFO - Update id=148157047 is handled. Duration 735 ms by bot id=8283776937
+2026-01-05 19:49:29,273 - aiogram.event - INFO - Update id=148157048 is handled. Duration 99 ms by bot id=8283776937
+2026-01-05 19:49:30,502 - aiogram.event - INFO - Update id=148157049 is handled. Duration 304 ms by bot id=8283776937
+2026-01-05 19:49:32,659 - aiogram.event - INFO - Update id=148157050 is handled. Duration 508 ms by bot id=8283776937
+2026-01-05 19:49:38,899 - aiogram.event - INFO - Update id=148157051 is handled. Duration 100 ms by bot id=8283776937
+2026-01-05 19:52:56,584 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-05 19:52:56,585 - aiogram.dispatcher - INFO - Polling stopped for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:52:56,585 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-05 19:53:08,178 - __main__ - INFO - Starting bot polling...
+2026-01-05 19:53:08,178 - aiogram.dispatcher - INFO - Start polling
+2026-01-05 19:53:08,925 - aiogram.dispatcher - INFO - Run polling for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:53:13,738 - aiogram.event - INFO - Update id=148157052 is handled. Duration 406 ms by bot id=8283776937
+2026-01-05 19:53:15,886 - aiogram.event - INFO - Update id=148157053 is handled. Duration 717 ms by bot id=8283776937
+2026-01-05 19:53:18,255 - aiogram.event - INFO - Update id=148157054 is handled. Duration 936 ms by bot id=8283776937
+2026-01-05 19:54:31,765 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 19:54:31,882 - handlers.file_analysis - INFO - File temp_files/BQACAgIAAxkBAAMvaVvsv26FQmQgjNQoyL-XhB5pLbgAAu-LAAL44TlKZnxtzSbfIgABOAQ_VideoEditedDowloadMaster.mp4.apk deleted.
+2026-01-05 19:54:31,882 - aiogram.event - INFO - Update id=148157055 is handled. Duration 7387 ms by bot id=8283776937
+2026-01-05 19:55:05,522 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-05 19:55:05,523 - aiogram.dispatcher - INFO - Polling stopped for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 19:55:05,523 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-05 19:55:08,992 - __main__ - INFO - Starting bot polling...
+2026-01-05 19:55:08,993 - aiogram.dispatcher - INFO - Start polling
+2026-01-05 19:55:10,161 - aiogram.dispatcher - INFO - Run polling for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 20:01:06,931 - handlers.file_analysis - INFO - File temp_files/BQACAgIAAxkBAAMxaVvuUPTKebOPXy620hqsTQzhuYoAAjVjAAKIG7BJZuBT-DR5NaM4BA_Java_Reverse_1.jar deleted.
+2026-01-05 20:01:06,931 - aiogram.event - INFO - Update id=148157056 is handled. Duration 1848 ms by bot id=8283776937
+2026-01-05 20:01:29,862 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:01:30,070 - handlers.file_analysis - INFO - File temp_files/BQACAgIAAxkBAAMzaVvuZiLjBcg3c5n2UTzOAw-Gl78AAo1uAAKm7YlI5MX-eG8X-yc4BA_BOMB_REVERSE.exe deleted.
+2026-01-05 20:01:30,070 - aiogram.event - INFO - Update id=148157057 is handled. Duration 3381 ms by bot id=8283776937
+2026-01-05 20:01:50,756 - handlers.file_analysis - INFO - File temp_files/BQACAgIAAxkBAAM1aVvudzohSSC2Z0brlX3YV3LMtSQAAt-RAAJ3O4BKw_XjYPKvmtQ4BA_33e103a3dff022827db7b00326e421f9fb1cc1c17e1d8da92268feb7997fcc8e.zip deleted.
+2026-01-05 20:01:50,756 - aiogram.event - INFO - Update id=148157058 is handled. Duration 6433 ms by bot id=8283776937
+2026-01-05 20:04:42,166 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-05 20:04:42,167 - aiogram.dispatcher - INFO - Polling stopped for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 20:04:42,168 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-05 20:09:55,806 - __main__ - INFO - Admin alerts enabled for ID: 6797528779
+2026-01-05 20:09:55,806 - __main__ - INFO - Starting bot polling...
+2026-01-05 20:09:55,807 - aiogram.dispatcher - INFO - Start polling
+2026-01-05 20:09:56,848 - aiogram.dispatcher - INFO - Run polling for bot @phishing_guart_bot id=8283776937 - 'PhishGuard'
+2026-01-05 20:10:14,677 - services.db - INFO - New user registered: 6797528779 (alexseygamezone)
+2026-01-05 20:10:15,104 - aiogram.event - INFO - Update id=148157059 is handled. Duration 430 ms by bot id=8283776937
+2026-01-05 20:10:25,619 - aiogram.event - INFO - Update id=148157060 is handled. Duration 411 ms by bot id=8283776937
+2026-01-05 20:11:56,139 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:11:56,446 - aiogram.event - INFO - Update id=148157061 is handled. Duration 3170 ms by bot id=8283776937
+2026-01-05 20:12:10,373 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:12:10,475 - aiogram.event - INFO - Update id=148157062 is handled. Duration 2047 ms by bot id=8283776937
+2026-01-05 20:12:32,390 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:12:32,695 - aiogram.event - INFO - Update id=148157063 is handled. Duration 2969 ms by bot id=8283776937
+2026-01-05 20:12:50,511 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:12:50,609 - aiogram.event - INFO - Update id=148157064 is handled. Duration 1320 ms by bot id=8283776937
+2026-01-05 20:13:06,792 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-05 20:13:06,895 - aiogram.event - INFO - Update id=148157065 is handled. Duration 2141 ms by bot id=8283776937

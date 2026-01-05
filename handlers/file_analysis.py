@@ -13,6 +13,18 @@ ai_explainer = AIExplainer()
 
 logger = logging.getLogger(__name__)
 
+@router.message(F.text == "/start")
+async def cmd_start(message: types.Message):
+    """
+    Приветственное сообщение.
+    """
+    await message.answer(
+        "👋 Привет! Я — *PhishGuard*.\n\n"
+        "Отправь мне подозрительный файл, и я проверю его по мировой базе антивирусов, "
+        "а затем объясню результаты простым языком.",
+        parse_mode="Markdown"
+    )
+
 @router.message(F.document)
 async def handle_document(message: types.Message):
     """
@@ -25,15 +37,15 @@ async def handle_document(message: types.Message):
     # Путь для сохранения файла
     file_path = os.path.join(TEMP_DIR, f"{file_id}_{file_name}")
 
-    status_msg = await message.reply("Scanning... 🔍")
+    status_msg = await message.reply("Проверяю файл по базам антивирусов... 🔍")
 
     try:
         # 1. Скачивание файла
         file = await bot.get_file(file_id)
         await bot.download_file(file.file_path, file_path)
         
-        # 2. Вычисление хеша
-        file_hash = vt_scanner.calculate_sha256(file_path)
+        # 2. Вычисление хеша (теперь асинхронно)
+        file_hash = await vt_scanner.calculate_sha256(file_path)
         
         # 3. Проверка в VirusTotal
         vt_report = await vt_scanner.check_file(file_hash)
@@ -41,7 +53,7 @@ async def handle_document(message: types.Message):
         if not vt_report:
             # Файл не найден в базе VT (скорее всего новый или неизвестный)
             # Для MVP считаем, что если нет в базе - нужно предупредить, но пока просто скажем "Unknown"
-            await status_msg.edit_text("ℹ️ Файл не найден в базе VirusTotal. Будьте осторожны.")
+            await status_msg.edit_text("ℹ️ Этот файл мне пока неизвестен. Будьте осторожны.")
             return
 
         # Получаем статистику обнаружений
@@ -50,7 +62,7 @@ async def handle_document(message: types.Message):
         
         if malicious_count == 0:
             # 4. Файл чист
-            await status_msg.edit_text("✅ Clean. Угроз не обнаружено.")
+            await status_msg.edit_text("✅ Файл чист. Угроз не найдено.")
         else:
             # 5. Файл заражен
             total_engines = sum(stats.values())
@@ -66,7 +78,7 @@ async def handle_document(message: types.Message):
             # Ограничим список угроз, чтобы не перегружать промпт (первые 10)
             threat_summary = ", ".join(set(threat_names[:10]))
             
-            await status_msg.edit_text(f"⚠️ Threats found: {malicious_count}/{total_engines}\nGenerating explanation... 🤖")
+            await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines} антивирусов считают этот файл опасным.\nСпрашиваю у ИИ, что это значит... 🤖")
             
             # 6. Генерация объяснения ИИ
             explanation = await ai_explainer.explain_threat(threat_summary)
