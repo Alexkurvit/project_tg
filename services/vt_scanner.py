@@ -1,4 +1,5 @@
 import hashlib
+import base64
 import aiohttp
 import logging
 from typing import Optional, Dict, Any
@@ -8,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class VirusTotalScanner:
     """
-    Класс для работы с API VirusTotal и вычисления хешей файлов.
+    Класс для работы с API VirusTotal (файлы и ссылки).
     """
 
     @staticmethod
@@ -29,24 +30,19 @@ class VirusTotalScanner:
             raise e
 
     @staticmethod
-    async def check_file(file_hash: str) -> Optional[Dict[str, Any]]:
+    async def _make_request(url: str) -> Optional[Dict[str, Any]]:
         """
-        Проверяет наличие отчета о файле в VirusTotal по его хешу.
-        Использует API v3.
+        Внутренний метод для выполнения запросов к VT.
         """
-        url = f"https://www.virustotal.com/api/v3/files/{file_hash}"
         headers = {
             "x-apikey": VT_API_KEY
         }
-
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
-                        data = await response.json()
-                        return data
+                        return await response.json()
                     elif response.status == 404:
-                        # Файл не найден в базе VT
                         return None
                     else:
                         logger.error(f"Ошибка VT API: статус {response.status}")
@@ -54,3 +50,26 @@ class VirusTotalScanner:
             except Exception as e:
                 logger.error(f"Ошибка соединения с VT: {e}")
                 return None
+
+    @classmethod
+    async def check_file(cls, file_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Проверяет наличие отчета о файле в VirusTotal по его хешу.
+        """
+        url = f"https://www.virustotal.com/api/v3/files/{file_hash}"
+        return await cls._make_request(url)
+
+    @classmethod
+    async def check_url(cls, target_url: str) -> Optional[Dict[str, Any]]:
+        """
+        Проверяет URL в VirusTotal.
+        URL должен быть закодирован в base64 (url safe) без паддинга '='.
+        """
+        try:
+            # Кодируем URL в base64 url-safe формат и убираем '='
+            url_id = base64.urlsafe_b64encode(target_url.encode()).decode().strip("=")
+            url = f"https://www.virustotal.com/api/v3/urls/{url_id}"
+            return await cls._make_request(url)
+        except Exception as e:
+            logger.error(f"Ошибка при проверке URL {target_url}: {e}")
+            return None
