@@ -6,7 +6,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
-from handlers import file_analysis
+from handlers import file_analysis, text_analysis
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -27,7 +27,10 @@ async def main():
     dp = Dispatcher()
     
     # Регистрация роутеров
+    # Важно: file_analysis содержит обработку /start (F.text == "/start"), 
+    # поэтому он должен быть первым, чтобы команда не ушла в общий анализ текста.
     dp.include_router(file_analysis.router)
+    dp.include_router(text_analysis.router)
 
     logger.info("Starting bot polling...")
     try:
