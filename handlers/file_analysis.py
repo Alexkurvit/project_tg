@@ -3,7 +3,7 @@ import logging
 from aiogram import Router, F, types
 from aiogram.types import FSInputFile
 
-from config import TEMP_DIR
+from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
 
@@ -33,6 +33,14 @@ async def handle_document(message: types.Message):
     bot = message.bot
     file_id = message.document.file_id
     file_name = message.document.file_name
+    file_size = message.document.file_size
+
+    if file_size > MAX_FILE_SIZE:
+        await message.reply(
+            f"❌ Файл слишком большой ({file_size / 1024 / 1024:.2f} MB).\n"
+            "Я могу проверять файлы только до 20 MB из-за ограничений Telegram."
+        )
+        return
     
     # Путь для сохранения файла
     file_path = os.path.join(TEMP_DIR, f"{file_id}_{file_name}")
