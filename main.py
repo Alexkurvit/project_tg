@@ -7,6 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
 from handlers import file_analysis, text_analysis
+from middlewares.throttling import ThrottlingMiddleware
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -25,6 +26,9 @@ async def main():
     
     # Инициализация диспетчера
     dp = Dispatcher()
+    
+    # Подключение Middleware (Анти-спам: 1 сообщение в 5 секунд)
+    dp.message.middleware(ThrottlingMiddleware(limit=5.0))
     
     # Регистрация роутеров
     # Важно: file_analysis содержит обработку /start (F.text == "/start"), 
