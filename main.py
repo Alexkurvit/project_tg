@@ -1,16 +1,25 @@
 import asyncio
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
-from handlers import file_analysis, text_analysis
+from handlers import file_analysis, text_analysis, common
 from middlewares.throttling import ThrottlingMiddleware
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+file_handler = RotatingFileHandler("bot.log", maxBytes=5*1024*1024, backupCount=2)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        file_handler
+    ]
+)
 logger = logging.getLogger(__name__)
 
 async def main():
@@ -27,14 +36,14 @@ async def main():
     # Инициализация диспетчера
     dp = Dispatcher()
     
-    # Подключение Middleware (Анти-спам: 1 сообщение в 5 секунд)
-    dp.message.middleware(ThrottlingMiddleware(limit=5.0))
+    # Подключение Middleware (Анти-спам: 1 сообщение в 2 секунды)
+    dp.message.middleware(ThrottlingMiddleware(limit=2.0))
     
     # Регистрация роутеров
-    # Важно: file_analysis содержит обработку /start (F.text == "/start"), 
-    # поэтому он должен быть первым, чтобы команда не ушла в общий анализ текста.
-    dp.include_router(file_analysis.router)
-    dp.include_router(text_analysis.router)
+    # Порядок важен: специфичные команды -> общие обработчики
+    dp.include_router(common.router)        # /help, /tips
+    dp.include_router(file_analysis.router) # /start, документы
+    dp.include_router(text_analysis.router) # Любой текст (должен быть последним)
 
     logger.info("Starting bot polling...")
     try:
