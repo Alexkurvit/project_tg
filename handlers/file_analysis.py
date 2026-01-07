@@ -14,6 +14,8 @@ from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
 from services.db import Database
+# Импортируем функцию логики проверки текста
+from handlers.text_analysis import run_text_check
 
 router = Router()
 vt_scanner = VirusTotalScanner()
@@ -49,14 +51,19 @@ async def cmd_start(message: types.Message, command: CommandObject):
         # Обработка перехода из Inline-режима
         try:
             # Восстанавливаем паддинг base64
-            encoded_data = args[4:]
-            padding = '=' * (4 - len(encoded_data) % 4)
-            decoded_text = base64.urlsafe_b64decode(encoded_data + padding).decode()
+            # Мы используем префиксы "url_" или "txt_", это 4 символа.
+            # Если префикс 3 символа, то args[4:] работает.
+            # Если url_... то ок.
             
-            # Подменяем текст сообщения и вызываем обработчик анализа
-            from handlers.text_analysis import handle_text_analysis
-            message.text = decoded_text
-            await handle_text_analysis(message)
+            payload = args[4:] # отрезаем 'url_' или 'txt_'
+            if not payload:
+                 payload = args # Если вдруг префикса нет (старая версия)
+            
+            padding = '=' * (4 - len(payload) % 4)
+            decoded_text = base64.urlsafe_b64decode(payload + padding).decode()
+            
+            # Вместо хака с message.text вызываем выделенную функцию логики
+            await run_text_check(message, decoded_text)
             return
         except Exception as e:
             logger.error(f"Error decoding deep link args: {e}")

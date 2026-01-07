@@ -18,21 +18,18 @@ logger = logging.getLogger(__name__)
 # Регулярка для поиска ссылок (http/https)
 URL_PATTERN = r"(https?://[^\s]+)"
 
-@router.message(F.text)
-async def handle_text_analysis(message: types.Message):
+async def run_text_check(message: types.Message, text: str):
     """
-    Анализирует текстовые сообщения.
-    1. Ищет ссылки -> Проверяет в VT.
-    2. Анализирует текст + результаты VT через ИИ.
+    Общая логика проверки текста/ссылок.
+    Вынесена в отдельную функцию, чтобы можно было вызывать из Deep Linking (/start).
     """
-    text = message.text
     user_id = message.from_user.id
     found_urls = re.findall(URL_PATTERN, text)
     
     vt_stats = None
     report_link = None
     
-    status_msg = await message.reply("Проверяю текст и ссылки... 🕵️‍♂️")
+    status_msg = await message.reply(f"🔎 Принято в работу: {html.escape(text[:50])}...\nПроверяю... 🕵️‍♂️", parse_mode="HTML")
 
     if found_urls:
         url_to_check = found_urls[0]
@@ -77,3 +74,10 @@ async def handle_text_analysis(message: types.Message):
         markup = builder.as_markup()
     
     await status_msg.edit_text(safe_verdict, parse_mode="HTML", reply_markup=markup)
+
+@router.message(F.text)
+async def handle_text_analysis(message: types.Message):
+    """
+    Хендлер для обычных текстовых сообщений.
+    """
+    await run_text_check(message, message.text)
