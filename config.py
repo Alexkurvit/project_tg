@@ -13,6 +13,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 admin_id_str = os.getenv("ADMIN_ID")
 ADMIN_ID = int(admin_id_str) if admin_id_str else None
 
+log_id_str = os.getenv("SECURITY_LOG_ID")
+SECURITY_LOG_ID = int(log_id_str) if log_id_str else ADMIN_ID
+
 # Constants
 TEMP_DIR = "temp_files"
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB limit example (optional but good practice)

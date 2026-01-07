@@ -24,6 +24,9 @@ class VirusTotalScanner:
     """
     Класс для работы с API VirusTotal (файлы и ссылки).
     """
+    @staticmethod
+    def is_enabled() -> bool:
+        return bool(VT_API_KEY)
 
     @staticmethod
     def _calculate_sha256_sync(file_path: str) -> str:

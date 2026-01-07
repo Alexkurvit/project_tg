@@ -2,15 +2,33 @@ import logging
 import re
 import html
 import base64
-from aiogram import Router, F, types
+from typing import Optional
+from aiogram import Bot, Router, types
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
 from services.vt_scanner import VirusTotalScanner
 
 router = Router()
 vt_scanner = VirusTotalScanner()
 logger = logging.getLogger(__name__)
+_BOT_USERNAME: Optional[str] = None
 
 URL_PATTERN = r"(https?://[^\s]+)"
+
+async def _get_bot_username(bot: Bot) -> Optional[str]:
+    global _BOT_USERNAME
+    if _BOT_USERNAME:
+        return _BOT_USERNAME
+    cached = getattr(bot, "username", None)
+    if cached:
+        _BOT_USERNAME = cached
+        return _BOT_USERNAME
+    try:
+        me = await bot.get_me()
+    except Exception as e:
+        logger.error(f"Failed to fetch bot username: {e}")
+        return None
+    _BOT_USERNAME = me.username
+    return _BOT_USERNAME
 
 @router.inline_query()
 async def handle_inline_query(inline_query: types.InlineQuery):
@@ -21,6 +39,11 @@ async def handle_inline_query(inline_query: types.InlineQuery):
     query_text = inline_query.query.strip()
     logger.info(f"INLINE QUERY RECEIVED: '{query_text}' from user {inline_query.from_user.id}")
     
+    bot_username = await _get_bot_username(inline_query.bot)
+    if not bot_username:
+        await inline_query.answer(results=[], cache_time=5, is_personal=True)
+        return
+
     results = []
 
     # Ищем ссылку
@@ -43,7 +66,7 @@ async def handle_inline_query(inline_query: types.InlineQuery):
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(
                 text="🔎 Получить результат", 
-                url=f"https://t.me/phishing_guart_bot?start=url_{encoded_url}"
+                url=f"https://t.me/{bot_username}?start=url_{encoded_url}"
             )]
         ])
 
@@ -72,7 +95,7 @@ async def handle_inline_query(inline_query: types.InlineQuery):
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
                 [types.InlineKeyboardButton(
                     text="🔎 Анализировать", 
-                    url=f"https://t.me/phishing_guart_bot?start=txt_{encoded_text}"
+                    url=f"https://t.me/{bot_username}?start=txt_{encoded_text}"
                 )]
             ])
         ))

@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import html
 from aiogram import Bot
 
 class TelegramAlertHandler(logging.Handler):
@@ -30,7 +31,8 @@ class TelegramAlertHandler(logging.Handler):
             if len(log_entry) > 3500:
                 log_entry = log_entry[:3500] + "... (truncated)"
             
-            text = f"🚨 **SYSTEM ERROR DETECTED**\n\n```\n{log_entry}\n```"
+            safe_log = html.escape(log_entry)
+            text = f"🚨 <b>SYSTEM ERROR DETECTED</b>\n\n<pre>{safe_log}</pre>"
             
             # Создаем задачу в текущем цикле
             loop.create_task(self._send_alert(text))
@@ -43,7 +45,7 @@ class TelegramAlertHandler(logging.Handler):
             await self.bot.send_message(
                 chat_id=self.admin_id,
                 text=text,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception:
             # Если не удалось отправить алерт (например, Telegram упал), 

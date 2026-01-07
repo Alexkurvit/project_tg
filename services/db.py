@@ -49,7 +49,46 @@ class Database:
                 await db.execute("ALTER TABLE users ADD COLUMN links_checked INTEGER DEFAULT 0")
             if "threats_found" not in columns:
                 await db.execute("ALTER TABLE users ADD COLUMN threats_found INTEGER DEFAULT 0")
+            
+            # Таблица настроек чатов (групп)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS chats (
+                    id INTEGER PRIMARY KEY,
+                    title TEXT,
+                    protection_mode TEXT DEFAULT 'active', -- 'active' или 'silent'
+                    strict_mode INTEGER DEFAULT 0,        -- 1 (удалять подозрительные), 0 (только предупреждать)
+                    is_active INTEGER DEFAULT 1
+                )
+            """)
                 
+            await db.commit()
+
+    async def register_chat(self, chat_id: int, title: str):
+        """Регистрирует чат или обновляет заголовок."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO chats (id, title)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET title = excluded.title
+            """, (chat_id, title))
+            await db.commit()
+
+    async def get_chat_settings(self, chat_id: int):
+        """Возвращает настройки чата."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("SELECT protection_mode, strict_mode FROM chats WHERE id = ?", (chat_id,)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {"mode": row[0], "strict": bool(row[1])}
+                return {"mode": "active", "strict": False}
+
+    async def update_chat_setting(self, chat_id: int, key: str, value):
+        """Обновляет конкретную настройку чата."""
+        async with aiosqlite.connect(self.db_path) as db:
+            if key == "mode":
+                await db.execute("UPDATE chats SET protection_mode = ? WHERE id = ?", (value, chat_id))
+            elif key == "strict":
+                await db.execute("UPDATE chats SET strict_mode = ? WHERE id = ?", (1 if value else 0, chat_id))
             await db.commit()
 
     async def register_user(self, user_id: int, username: str, full_name: str):

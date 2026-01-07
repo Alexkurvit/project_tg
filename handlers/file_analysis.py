@@ -14,6 +14,7 @@ from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
 from services.db import Database
+from services.security_logger import SecurityLogger
 # Импортируем функцию логики проверки текста
 from handlers.text_analysis import run_text_check
 
@@ -50,21 +51,17 @@ async def cmd_start(message: types.Message, command: CommandObject):
     if args:
         # Обработка перехода из Inline-режима
         try:
-            # Восстанавливаем паддинг base64
-            # Мы используем префиксы "url_" или "txt_", это 4 символа.
-            # Если префикс 3 символа, то args[4:] работает.
-            # Если url_... то ок.
-            
-            payload = args[4:] # отрезаем 'url_' или 'txt_'
-            if not payload:
-                 payload = args # Если вдруг префикса нет (старая версия)
-            
-            padding = '=' * (4 - len(payload) % 4)
-            decoded_text = base64.urlsafe_b64decode(payload + padding).decode()
-            
-            # Вместо хака с message.text вызываем выделенную функцию логики
-            await run_text_check(message, decoded_text)
-            return
+            payload = args
+            if args.startswith(("url_", "txt_")):
+                payload = args[4:]
+
+            if payload:
+                padding = "=" * (-len(payload) % 4)
+                decoded_text = base64.urlsafe_b64decode(payload + padding).decode(errors="replace")
+
+                # Вместо хака с message.text вызываем выделенную функцию логики
+                await run_text_check(message, decoded_text)
+                return
         except Exception as e:
             logger.error(f"Error decoding deep link args: {e}")
 
@@ -86,18 +83,29 @@ async def handle_document(message: types.Message):
     file_name = message.document.file_name or "file"
     file_size = message.document.file_size
     user_id = message.from_user.id
+    
+    chat_type = message.chat.type
+    is_group = chat_type in ("group", "supergroup")
 
-    if file_size > MAX_FILE_SIZE:
-        await message.reply(
-            f"❌ Файл слишком большой ({file_size / 1024 / 1024:.2f} MB).\n"
-            "Я могу проверять файлы только до 20 MB из-за ограничений Telegram."
-        )
+    if file_size is not None and file_size > MAX_FILE_SIZE:
+        if not is_group:
+            await message.reply(
+                f"❌ Файл слишком большой ({file_size / 1024 / 1024:.2f} MB).\n"
+                "Я могу проверять файлы только до 20 MB из-за ограничений Telegram."
+            )
+        return
+
+    if not vt_scanner.is_enabled():
+        if not is_group:
+            await message.reply("❌ VirusTotal недоступен: не настроен ключ VT_API_KEY.")
         return
     
     # Путь для сохранения файла
     file_path = _build_temp_path(file_name)
 
-    status_msg = await message.reply("Проверяю файл по базам антивирусов... 🔍")
+    status_msg = None
+    if not is_group:
+        status_msg = await message.reply("Проверяю файл по базам антивирусов... 🔍")
 
     try:
         # 1. Скачивание файла
@@ -113,13 +121,14 @@ async def handle_document(message: types.Message):
         
         # Если отчет не найден, загружаем файл на сканирование
         if not vt_report:
-            await status_msg.edit_text("ℹ️ Файл новый. Загружаю на сканирование в VirusTotal (это может занять время)... ⏳")
+            if not is_group and status_msg:
+                await status_msg.edit_text("ℹ️ Файл новый. Загружаю на сканирование в VirusTotal (это может занять время)... ⏳")
             
             analysis_id = await vt_scanner.upload_file(file_path)
             await db.increment_api_stats(vt=1)
             
             if not analysis_id:
-                await status_msg.edit_text("❌ Ошибка при загрузке файла на сканирование.")
+                if status_msg: await status_msg.edit_text("❌ Ошибка при загрузке файла на сканирование.")
                 return
 
             max_retries = 20
@@ -137,7 +146,7 @@ async def handle_document(message: types.Message):
                     vt_report = analysis_result 
                     break
             else:
-                await status_msg.edit_text("⌛ Сканирование затянулось. Попробуйте проверить этот файл позже.")
+                if status_msg: await status_msg.edit_text("⌛ Сканирование затянулось. Попробуйте проверить этот файл позже.")
                 return
 
         # 4. Обработка результатов
@@ -151,12 +160,20 @@ async def handle_document(message: types.Message):
         builder = InlineKeyboardBuilder()
         builder.row(types.InlineKeyboardButton(text="🌐 Полный отчет (VirusTotal)", url=report_link))
 
+        # Получаем настройки чата
+        chat_settings = {"mode": "active", "strict": False}
+        if is_group:
+            chat_settings = await db.get_chat_settings(message.chat.id)
+
         if malicious_count == 0:
-            await status_msg.edit_text(
-                "✅ <b>Файл чист.</b> Угроз не найдено.",
-                parse_mode="HTML",
-                reply_markup=builder.as_markup()
-            )
+            if not is_group:
+                if status_msg:
+                    await status_msg.edit_text(
+                        "✅ <b>Файл чист.</b> Угроз не найдено.",
+                        parse_mode="HTML",
+                        reply_markup=builder.as_markup()
+                    )
+            # В группе: Молчим, если чисто.
         else:
             total_engines = sum(stats.values())
             threat_names = []
@@ -164,24 +181,58 @@ async def handle_document(message: types.Message):
             
             for engine, result in results.items():
                 if result.get("category") == "malicious":
-                    threat_names.append(result.get("result", "Unknown"))
+                    threat_name = result.get("result") or "Unknown"
+                    threat_names.append(str(threat_name))
             
             threat_summary = ", ".join(set(threat_names[:10]))
-            await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines}. Анализирую... 🤖")
+            
+            if status_msg:
+                await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines}. Анализирую... 🤖")
             
             explanation = await ai_explainer.explain_threat(threat_summary)
-            await db.increment_api_stats(ai=1)
+            if ai_explainer.enabled:
+                await db.increment_api_stats(ai=1)
             safe_explanation = html.escape(explanation)
             
             final_text = (
                 f"🚨 <b>Обнаружена угроза!</b> ({malicious_count}/{total_engines})\n\n"
                 f"{safe_explanation}"
             )
-            await status_msg.edit_text(final_text, parse_mode="HTML", reply_markup=builder.as_markup())
+            
+            if is_group:
+                sender_name = html.escape(message.from_user.full_name or "")
+                try:
+                    await message.delete()
+                except:
+                    pass
+                
+                # Если режим НЕ Silent, пишем в чат
+                if chat_settings["mode"] == "active":
+                    await message.answer(
+                        f"🚫 <b>ВРЕДОНОСНЫЙ ФАЙЛ УДАЛЕН</b>\nОтправитель: {sender_name}\n\n{final_text}",
+                        parse_mode="HTML",
+                        reply_markup=builder.as_markup()
+                    )
+                
+                # Логируем в админ-канал ВСЕГДА
+                sec_logger = SecurityLogger(message.bot)
+                await sec_logger.log_threat(
+                    chat_name=message.chat.title,
+                    user_name=message.from_user.full_name,
+                    user_id=message.from_user.id,
+                    threat_type=f"Вредоносный файл ({malicious_count} детектов)",
+                    item_name=file_name,
+                    ai_analysis=explanation
+                )
+            else:
+                if status_msg:
+                    await status_msg.edit_text(final_text, parse_mode="HTML", reply_markup=builder.as_markup())
+                else:
+                    await message.reply(final_text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     except Exception as e:
         logger.error(f"Error handling file: {e}")
-        await status_msg.edit_text("Произошла ошибка при анализе файла.")
+        if status_msg: await status_msg.edit_text("Произошла ошибка при анализе файла.")
     finally:
         if os.path.exists(file_path):
             try:
