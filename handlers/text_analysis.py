@@ -18,18 +18,20 @@ logger = logging.getLogger(__name__)
 # Регулярка для поиска ссылок (http/https)
 URL_PATTERN = r"(https?://[^\s]+)"
 
-async def run_text_check(message: types.Message, text: str):
+async def run_text_check(message: types.Message, text_to_check: str):
     """
     Общая логика проверки текста/ссылок.
-    Вынесена в отдельную функцию, чтобы можно было вызывать из Deep Linking (/start).
+    text_to_check: Текст для анализа (может отличаться от message.text при Deep Linking)
     """
     user_id = message.from_user.id
-    found_urls = re.findall(URL_PATTERN, text)
+    
+    # Используем переданный текст, а не message.text
+    found_urls = re.findall(URL_PATTERN, text_to_check)
     
     vt_stats = None
     report_link = None
     
-    status_msg = await message.reply(f"🔎 Принято в работу: {html.escape(text[:50])}...\nПроверяю... 🕵️‍♂️", parse_mode="HTML")
+    status_msg = await message.reply(f"🔎 Принято в работу: {html.escape(text_to_check[:50])}...\nПроверяю... 🕵️‍♂️", parse_mode="HTML")
 
     if found_urls:
         url_to_check = found_urls[0]
@@ -59,7 +61,7 @@ async def run_text_check(message: types.Message, text: str):
         await db.update_action_stats(user_id, link=True, threat=is_threat)
     
     # Отправляем текст и статистику VT (если есть) в ИИ
-    ai_verdict = await ai_explainer.analyze_text(text, vt_stats)
+    ai_verdict = await ai_explainer.analyze_text(text_to_check, vt_stats)
     await db.increment_api_stats(ai=1) # +1 запрос
     safe_verdict = html.escape(ai_verdict)
     
@@ -80,4 +82,5 @@ async def handle_text_analysis(message: types.Message):
     """
     Хендлер для обычных текстовых сообщений.
     """
+    # Здесь передаем message.text как текст для проверки
     await run_text_check(message, message.text)
