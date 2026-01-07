@@ -8,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 
 from config import BOT_TOKEN, ADMIN_ID
-from handlers import file_analysis, text_analysis, common, admin
+from handlers import file_analysis, text_analysis, common, admin, inline
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.stats import StatsMiddleware
 from utils.logging_handler import TelegramAlertHandler
@@ -69,6 +69,7 @@ async def main():
     # Порядок важен: специфичные команды -> общие обработчики
     dp.include_router(admin.router)         # /stats (только админ)
     dp.include_router(common.router)        # /help, /tips
+    dp.include_router(inline.router)        # Inline запросы
     dp.include_router(file_analysis.router) # /start, документы
     dp.include_router(text_analysis.router) # Любой текст (должен быть последним)
 
