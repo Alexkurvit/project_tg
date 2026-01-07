@@ -11,10 +11,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
+from services.db import Database
 
 router = Router()
 vt_scanner = VirusTotalScanner()
 ai_explainer = AIExplainer()
+db = Database()
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,7 @@ async def handle_document(message: types.Message):
     file_id = message.document.file_id
     file_name = message.document.file_name or "file"
     file_size = message.document.file_size
+    user_id = message.from_user.id
 
     if file_size > MAX_FILE_SIZE:
         await message.reply(
@@ -79,12 +82,14 @@ async def handle_document(message: types.Message):
         
         # 3. Проверка в VirusTotal
         vt_report = await vt_scanner.check_file(file_hash)
+        await db.increment_api_stats(vt=1) # +1 запрос
         
         # Если отчет не найден, загружаем файл на сканирование
         if not vt_report:
             await status_msg.edit_text("ℹ️ Файл новый. Загружаю на сканирование в VirusTotal (это может занять время)... ⏳")
             
             analysis_id = await vt_scanner.upload_file(file_path)
+            await db.increment_api_stats(vt=1) # +1 запрос (upload)
             
             if not analysis_id:
                 await status_msg.edit_text("❌ Ошибка при загрузке файла на сканирование.")
@@ -95,6 +100,7 @@ async def handle_document(message: types.Message):
             for _ in range(max_retries):
                 await asyncio.sleep(3) # Ждем перед проверкой
                 analysis_result = await vt_scanner.get_analysis(analysis_id)
+                await db.increment_api_stats(vt=1) # +1 запрос (polling)
                 
                 if not analysis_result:
                     continue
@@ -113,9 +119,10 @@ async def handle_document(message: types.Message):
         stats = attributes.get("last_analysis_stats") or attributes.get("stats") or {}
         malicious_count = stats.get("malicious", 0)
         
+        # Обновляем статистику пользователя
+        await db.update_action_stats(user_id, file=True, threat=(malicious_count > 0))
+        
         # Формируем ссылку на отчет
-        # Для файлов ссылка обычно https://www.virustotal.com/gui/file/<hash>
-        # sha256 лежит в meta->file_info->sha256 или attributes->sha256 или мы его сами считали
         report_link = f"https://www.virustotal.com/gui/file/{file_hash}"
         
         # Создаем кнопку
@@ -149,6 +156,7 @@ async def handle_document(message: types.Message):
             
             # Генерация объяснения ИИ
             explanation = await ai_explainer.explain_threat(threat_summary)
+            await db.increment_api_stats(ai=1) # +1 запрос к AI
             safe_explanation = html.escape(explanation)
             
             final_text = (
