@@ -32,25 +32,15 @@ class Database:
         """
         now = datetime.now()
         async with aiosqlite.connect(self.db_path) as db:
-            # Проверяем, есть ли пользователь
-            async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
-                user = await cursor.fetchone()
-
-            if not user:
-                # Новый пользователь
-                await db.execute("""
-                    INSERT INTO users (id, username, full_name, joined_date, last_active, interaction_count)
-                    VALUES (?, ?, ?, ?, ?, 1)
-                """, (user_id, username, full_name, now, now))
-                logger.info(f"New user registered: {user_id} ({username})")
-            else:
-                # Старый пользователь - обновляем активность и счетчик
-                await db.execute("""
-                    UPDATE users 
-                    SET username = ?, full_name = ?, last_active = ?, interaction_count = interaction_count + 1
-                    WHERE id = ?
-                """, (username, full_name, now, user_id))
-            
+            await db.execute("""
+                INSERT INTO users (id, username, full_name, joined_date, last_active, interaction_count)
+                VALUES (?, ?, ?, ?, ?, 1)
+                ON CONFLICT(id) DO UPDATE SET
+                    username = excluded.username,
+                    full_name = excluded.full_name,
+                    last_active = excluded.last_active,
+                    interaction_count = users.interaction_count + 1
+            """, (user_id, username, full_name, now, now))
             await db.commit()
 
     async def get_statistics(self):

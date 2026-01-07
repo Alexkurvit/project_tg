@@ -9,9 +9,23 @@ class ThrottlingMiddleware(BaseMiddleware):
     Умный анти-спам. Если пользователь пишет слишком быстро, 
     бот просит подождать и сам обрабатывает сообщение после паузы.
     """
-    def __init__(self, limit: float = 2.0):
+    def __init__(self, limit: float = 2.0, cleanup_interval: float = 300.0, max_idle: float = 600.0):
         self.limit = limit
         self.users: Dict[int, Dict[str, float]] = {}
+        self.cleanup_interval = cleanup_interval
+        self.max_idle = max_idle
+        self._last_cleanup = time.time()
+
+    def _cleanup(self, current_time: float) -> None:
+        stale_ids = [
+            user_id
+            for user_id, data in self.users.items()
+            if current_time - data.get("last_request", 0.0) > self.max_idle
+            and current_time - data.get("last_warned", 0.0) > self.max_idle
+        ]
+        for user_id in stale_ids:
+            del self.users[user_id]
+        self._last_cleanup = current_time
 
     async def __call__(
         self,
@@ -24,6 +38,8 @@ class ThrottlingMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         current_time = time.time()
+        if current_time - self._last_cleanup > self.cleanup_interval:
+            self._cleanup(current_time)
         user_data = self.users.setdefault(user.id, {'last_request': 0.0, 'last_warned': 0.0})
         
         last_request = user_data['last_request']

@@ -21,10 +21,10 @@ async def cmd_stats(message: types.Message):
     stats = await db.get_statistics()
     
     text = (
-        "📊 **Статистика PhishGuard**\n\n"
-        f"👥 Всего пользователей: **{stats['total_users']}**\n"
-        f"📅 Активных сегодня: **{stats['active_today']}**\n"
-        f"🗓 Активных за неделю: **{stats['active_week']}**\n"
+        "📊 <b>Статистика PhishGuard</b>\n\n"
+        f"👥 Всего пользователей: <b>{stats['total_users']}</b>\n"
+        f"📅 Активных сегодня: <b>{stats['active_today']}</b>\n"
+        f"🗓 Активных за неделю: <b>{stats['active_week']}</b>\n"
     )
     
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="HTML")

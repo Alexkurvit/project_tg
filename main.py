@@ -5,6 +5,7 @@ from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from config import BOT_TOKEN, ADMIN_ID
 from handlers import file_analysis, text_analysis, common, admin
@@ -37,8 +38,15 @@ async def main():
     db = Database()
     await db.create_tables()
 
-    # Инициализация бота с DefaultBotProperties (для parse_mode)
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    # Настройка сессии с увеличенным тайм-аутом (для нестабильного интернета)
+    session = AiohttpSession(timeout=60)
+
+    # Инициализация бота с DefaultBotProperties и кастомной сессией
+    bot = Bot(
+        token=BOT_TOKEN, 
+        session=session,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
     
     # Подключаем отправку алертов админу
     if ADMIN_ID:
@@ -65,6 +73,10 @@ async def main():
     dp.include_router(text_analysis.router) # Любой текст (должен быть последним)
 
     logger.info("Starting bot polling...")
+    
+    # Удаляем вебхук и сбрасываем старые обновления (чтобы не было конфликтов при старте)
+    await bot.delete_webhook(drop_pending_updates=True)
+
     try:
         await dp.start_polling(bot)
     finally:

@@ -1,7 +1,11 @@
 import os
 import logging
+import html
+import asyncio
+import secrets
+import string
+from pathlib import Path
 from aiogram import Router, F, types
-from aiogram.types import FSInputFile
 
 from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
@@ -13,16 +17,33 @@ ai_explainer = AIExplainer()
 
 logger = logging.getLogger(__name__)
 
+SAFE_FILENAME_CHARS = set(string.ascii_letters + string.digits + "._-")
+
+def _sanitize_filename(file_name: str, max_length: int = 120) -> str:
+    base_name = os.path.basename(file_name or "")
+    cleaned = "".join(ch for ch in base_name if ch in SAFE_FILENAME_CHARS)
+    if not cleaned or cleaned in {".", ".."}:
+        cleaned = "file"
+    if len(cleaned) > max_length:
+        root, ext = os.path.splitext(cleaned)
+        cleaned = root[: max_length - len(ext)] + ext
+    return cleaned
+
+def _build_temp_path(file_name: str) -> str:
+    safe_name = _sanitize_filename(file_name)
+    unique_prefix = secrets.token_hex(8)
+    return str(Path(TEMP_DIR) / f"{unique_prefix}_{safe_name}")
+
 @router.message(F.text == "/start")
 async def cmd_start(message: types.Message):
     """
     Приветственное сообщение.
     """
     await message.answer(
-        "👋 Привет! Я — *PhishGuard*.\n\n"
+        "👋 Привет! Я — <b>PhishGuard</b>.\n\n"
         "Отправь мне подозрительный файл, и я проверю его по мировой базе антивирусов, "
         "а затем объясню результаты простым языком.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.message(F.document)
@@ -32,7 +53,7 @@ async def handle_document(message: types.Message):
     """
     bot = message.bot
     file_id = message.document.file_id
-    file_name = message.document.file_name
+    file_name = message.document.file_name or "file"
     file_size = message.document.file_size
 
     if file_size > MAX_FILE_SIZE:
@@ -43,7 +64,7 @@ async def handle_document(message: types.Message):
         return
     
     # Путь для сохранения файла
-    file_path = os.path.join(TEMP_DIR, f"{file_id}_{file_name}")
+    file_path = _build_temp_path(file_name)
 
     status_msg = await message.reply("Проверяю файл по базам антивирусов... 🔍")
 
@@ -52,57 +73,88 @@ async def handle_document(message: types.Message):
         file = await bot.get_file(file_id)
         await bot.download_file(file.file_path, file_path)
         
-        # 2. Вычисление хеша (теперь асинхронно)
+        # 2. Вычисление хеша
         file_hash = await vt_scanner.calculate_sha256(file_path)
         
         # 3. Проверка в VirusTotal
         vt_report = await vt_scanner.check_file(file_hash)
         
+        # Если отчет не найден, загружаем файл на сканирование
         if not vt_report:
-            # Файл не найден в базе VT (скорее всего новый или неизвестный)
-            # Для MVP считаем, что если нет в базе - нужно предупредить, но пока просто скажем "Unknown"
-            await status_msg.edit_text("ℹ️ Этот файл мне пока неизвестен. Будьте осторожны.")
-            return
+            await status_msg.edit_text("ℹ️ Файл новый. Загружаю на сканирование в VirusTotal (это может занять время)... ⏳")
+            
+            analysis_id = await vt_scanner.upload_file(file_path)
+            
+            if not analysis_id:
+                await status_msg.edit_text("❌ Ошибка при загрузке файла на сканирование.")
+                return
 
-        # Получаем статистику обнаружений
-        stats = vt_report.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+            # Полллинг результатов (ждем завершения анализа)
+            max_retries = 20  # 20 * 3 сек = 1 минута ожидания (можно увеличить)
+            for _ in range(max_retries):
+                await asyncio.sleep(3) # Ждем перед проверкой
+                analysis_result = await vt_scanner.get_analysis(analysis_id)
+                
+                if not analysis_result:
+                    continue
+                
+                status = analysis_result.get("data", {}).get("attributes", {}).get("status")
+                
+                if status == "completed":
+                    # Анализ завершен! Но нам нужен объект File, чтобы получить привычную структуру
+                    # Однако get_analysis возвращает stats прямо в атрибутах
+                    # Структура analysis object отличается от file object, но stats там есть.
+                    # https://docs.virustotal.com/reference/analysis-object
+                    vt_report = analysis_result 
+                    break
+            else:
+                await status_msg.edit_text("⌛ Сканирование затянулось. Попробуйте проверить этот файл позже.")
+                return
+
+        # 4. Обработка результатов
+        # Структура может отличаться в зависимости от того, получили мы FILE object или ANALYSIS object
+        attributes = vt_report.get("data", {}).get("attributes", {})
+        
+        # В analysis object статистика лежит в 'stats', в file object - в 'last_analysis_stats'
+        # Попробуем оба варианта
+        stats = attributes.get("last_analysis_stats") or attributes.get("stats") or {}
+        
         malicious_count = stats.get("malicious", 0)
         
         if malicious_count == 0:
-            # 4. Файл чист
             await status_msg.edit_text("✅ Файл чист. Угроз не найдено.")
         else:
-            # 5. Файл заражен
             total_engines = sum(stats.values())
             
-            # Собираем названия угроз для ИИ
-            # Берем результаты сканирования
-            results = vt_report.get("data", {}).get("attributes", {}).get("last_analysis_results", {})
+            # Сбор названий угроз
             threat_names = []
+            
+            # В analysis object результаты в 'results', в file object - 'last_analysis_results'
+            results = attributes.get("last_analysis_results") or attributes.get("results") or {}
+            
             for engine, result in results.items():
                 if result.get("category") == "malicious":
                     threat_names.append(result.get("result", "Unknown"))
             
-            # Ограничим список угроз, чтобы не перегружать промпт (первые 10)
             threat_summary = ", ".join(set(threat_names[:10]))
             
             await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines} антивирусов считают этот файл опасным.\nСпрашиваю у ИИ, что это значит... 🤖")
             
-            # 6. Генерация объяснения ИИ
+            # Генерация объяснения ИИ
             explanation = await ai_explainer.explain_threat(threat_summary)
+            safe_explanation = html.escape(explanation)
             
             final_text = (
-                f"🚨 *Обнаружена угроза!* ({malicious_count}/{total_engines})\n\n"
-                f"{explanation}"
+                f"🚨 <b>Обнаружена угроза!</b> ({malicious_count}/{total_engines})\n\n"
+                f"{safe_explanation}"
             )
-            # Используем Markdown для форматирования
-            await status_msg.edit_text(final_text, parse_mode="Markdown")
+            await status_msg.edit_text(final_text, parse_mode="HTML")
 
     except Exception as e:
         logger.error(f"Error handling file: {e}")
         await status_msg.edit_text("Произошла ошибка при анализе файла.")
     finally:
-        # 7. Очистка (удаление файла)
+        # Очистка
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)

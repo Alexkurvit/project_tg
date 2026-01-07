@@ -1,5 +1,6 @@
 import logging
 import re
+import html
 from aiogram import Router, F, types
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
@@ -41,5 +42,6 @@ async def handle_text_analysis(message: types.Message):
     
     # Отправляем текст и статистику VT (если есть) в ИИ
     ai_verdict = await ai_explainer.analyze_text(text, vt_stats)
+    safe_verdict = html.escape(ai_verdict)
     
-    await status_msg.edit_text(ai_verdict, parse_mode="Markdown")
+    await status_msg.edit_text(safe_verdict, parse_mode="HTML")
