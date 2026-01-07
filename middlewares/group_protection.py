@@ -15,7 +15,11 @@ class GroupProtectionMiddleware(BaseMiddleware):
 
         # Rough filter settings
         self.suspicious_extensions = {'.exe', '.scr', '.bat', '.com', '.zip', '.rar', '.7z', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.py', '.js', '.vbs'}
-        self.trigger_words = {'схема', 'заработок', 'crypto', 'usdt', 'airdrop', 'private', 'hack', 'cheat', 'пассивный доход', 'арбитраж', 'темка'}
+        self.trigger_words = {
+            'схема', 'заработок', 'crypto', 'usdt', 'airdrop', 'private', 'hack', 'cheat', 
+            'пассивный доход', 'арбитраж', 'темка', 'карта', 'номер', 'скинь', 'деньги', 
+            'банк', 'перевод', 'номер телефона', 'личные данные'
+        }
         self.url_pattern = re.compile(r"(https?://[^\s]+)|(t\.me/[^\s]+)|(tg://[^\s]+)")
 
     async def _is_admin(self, message: Message) -> bool:

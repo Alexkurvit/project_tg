@@ -23,11 +23,22 @@ async def cmd_settings(message: types.Message):
     settings = await db.get_chat_settings(message.chat.id)
     chat_title = html.escape(message.chat.title or "чат")
     
-    await message.answer(
+    text = (
         f"⚙️ <b>Настройки PhishGuard для чата: {chat_title}</b>\n\n"
-        f"🛡 <b>Режим:</b> {settings['mode'].capitalize()}\n"
-        f"🎯 <b>Строгий режим:</b> {'Вкл' if settings['strict'] else 'Выкл'}\n\n"
-        "Выберите настройку для изменения:",
+        "<b>🛡 Режимы защиты (Mode):</b>\n"
+        "• <b>Active:</b> Удаляет угрозы И пишет предупреждение в чат.\n"
+        "• <b>Silent:</b> Удаляет угрозы тихо. Отчет только админу.\n\n"
+        "<b>🎯 Строгость (Strict Mode):</b>\n"
+        "• <b>Выкл:</b> Удаляет только 🔴 ОПАСНОЕ. Предупреждает о 🟡 ПОДОЗРИТЕЛЬНОМ.\n"
+        "• <b>Вкл:</b> Удаляет и 🔴, и 🟡. Максимальная зачистка.\n\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"✅ <b>Текущий статус:</b>\n"
+        f"• Режим: <b>{settings['mode'].capitalize()}</b>\n"
+        f"• Strict: <b>{'Включен' if settings['strict'] else 'Выключен'}</b>"
+    )
+
+    await message.answer(
+        text,
         reply_markup=get_settings_keyboard(settings),
         parse_mode="HTML"
     )
@@ -66,12 +77,23 @@ async def handle_settings_callback(callback: types.CallbackQuery):
     settings = await db.get_chat_settings(callback.message.chat.id)
     chat_title = html.escape(callback.message.chat.title or "чат")
     
+    text = (
+        f"⚙️ <b>Настройки PhishGuard для чата: {chat_title}</b>\n\n"
+        "<b>🛡 Режимы защиты (Mode):</b>\n"
+        "• <b>Active:</b> Удаляет угрозы И пишет предупреждение в чат.\n"
+        "• <b>Silent:</b> Удаляет угрозы тихо. Отчет только админу.\n\n"
+        "<b>🎯 Строгость (Strict Mode):</b>\n"
+        "• <b>Выкл:</b> Удаляет только 🔴 ОПАСНОЕ. Предупреждает о 🟡 ПОДОЗРИТЕЛЬНОМ.\n"
+        "• <b>Вкл:</b> Удаляет и 🔴, и 🟡. Максимальная зачистка.\n\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"✅ <b>Текущий статус:</b>\n"
+        f"• Режим: <b>{settings['mode'].capitalize()}</b>\n"
+        f"• Strict: <b>{'Включен' if settings['strict'] else 'Выключен'}</b>"
+    )
+    
     try:
         await callback.message.edit_text(
-            f"⚙️ <b>Настройки PhishGuard для чата: {chat_title}</b>\n\n"
-            f"🛡 <b>Режим:</b> {settings['mode'].capitalize()}\n"
-            f"🎯 <b>Строгий режим:</b> {'Вкл' if settings['strict'] else 'Выкл'}\n\n"
-            "Выберите настройку для изменения:",
+            text,
             reply_markup=get_settings_keyboard(settings),
             parse_mode="HTML"
         )
