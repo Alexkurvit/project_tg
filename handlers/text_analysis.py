@@ -1,7 +1,9 @@
 import logging
 import re
 import html
+import base64
 from aiogram import Router, F, types
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from services.vt_scanner import VirusTotalScanner
 from services.ai_explainer import AIExplainer
 
@@ -22,10 +24,11 @@ async def handle_text_analysis(message: types.Message):
     2. Анализирует текст + результаты VT через ИИ.
     """
     text = message.text
-    # Ищем первую ссылку (для MVP берем первую, можно расширить на все)
     found_urls = re.findall(URL_PATTERN, text)
     
     vt_stats = None
+    report_link = None
+    
     status_msg = await message.reply("Проверяю текст и ссылки... 🕵️‍♂️")
 
     if found_urls:
@@ -36,7 +39,15 @@ async def handle_text_analysis(message: types.Message):
         if vt_report:
             stats = vt_report.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
             vt_stats = stats
-            # Если много детектов, сразу предупреждаем (опционально)
+            
+            # Генерируем ссылку на отчет
+            # ID URL в VT это base64 от URL
+            try:
+                url_id = base64.urlsafe_b64encode(url_to_check.encode()).decode().strip("=")
+                report_link = f"https://www.virustotal.com/gui/url/{url_id}"
+            except:
+                pass
+
             if stats.get("malicious", 0) > 0:
                 await status_msg.edit_text(f"⚠️ Ссылка выглядит подозрительно! Изучаю детали... 🤖")
     
@@ -44,4 +55,14 @@ async def handle_text_analysis(message: types.Message):
     ai_verdict = await ai_explainer.analyze_text(text, vt_stats)
     safe_verdict = html.escape(ai_verdict)
     
-    await status_msg.edit_text(safe_verdict, parse_mode="HTML")
+    # Добавляем кнопку, если была ссылка
+    markup = None
+    if report_link:
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(
+            text="🌐 Отчет по ссылке (VirusTotal)", 
+            url=report_link
+        ))
+        markup = builder.as_markup()
+    
+    await status_msg.edit_text(safe_verdict, parse_mode="HTML", reply_markup=markup)

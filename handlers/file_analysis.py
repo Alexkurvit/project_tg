@@ -6,6 +6,7 @@ import secrets
 import string
 from pathlib import Path
 from aiogram import Router, F, types
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import TEMP_DIR, MAX_FILE_SIZE
 from services.vt_scanner import VirusTotalScanner
@@ -17,7 +18,7 @@ ai_explainer = AIExplainer()
 
 logger = logging.getLogger(__name__)
 
-SAFE_FILENAME_CHARS = set(string.ascii_letters + string.digits + "._-")
+SAFE_FILENAME_CHARS = set(string.ascii_letters + string.digits + "._- ")
 
 def _sanitize_filename(file_name: str, max_length: int = 120) -> str:
     base_name = os.path.basename(file_name or "")
@@ -101,10 +102,6 @@ async def handle_document(message: types.Message):
                 status = analysis_result.get("data", {}).get("attributes", {}).get("status")
                 
                 if status == "completed":
-                    # Анализ завершен! Но нам нужен объект File, чтобы получить привычную структуру
-                    # Однако get_analysis возвращает stats прямо в атрибутах
-                    # Структура analysis object отличается от file object, но stats там есть.
-                    # https://docs.virustotal.com/reference/analysis-object
                     vt_report = analysis_result 
                     break
             else:
@@ -112,24 +109,34 @@ async def handle_document(message: types.Message):
                 return
 
         # 4. Обработка результатов
-        # Структура может отличаться в зависимости от того, получили мы FILE object или ANALYSIS object
         attributes = vt_report.get("data", {}).get("attributes", {})
-        
-        # В analysis object статистика лежит в 'stats', в file object - в 'last_analysis_stats'
-        # Попробуем оба варианта
         stats = attributes.get("last_analysis_stats") or attributes.get("stats") or {}
-        
         malicious_count = stats.get("malicious", 0)
         
+        # Формируем ссылку на отчет
+        # Для файлов ссылка обычно https://www.virustotal.com/gui/file/<hash>
+        # sha256 лежит в meta->file_info->sha256 или attributes->sha256 или мы его сами считали
+        report_link = f"https://www.virustotal.com/gui/file/{file_hash}"
+        
+        # Создаем кнопку
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(
+            text="🌐 Полный отчет (VirusTotal)", 
+            url=report_link
+        ))
+
         if malicious_count == 0:
-            await status_msg.edit_text("✅ Файл чист. Угроз не найдено.")
+            await status_msg.edit_text(
+                "✅ <b>Файл чист.</b> Угроз не найдено.\n\n"
+                "Вы можете посмотреть технический отчет по кнопке ниже.",
+                parse_mode="HTML",
+                reply_markup=builder.as_markup()
+            )
         else:
             total_engines = sum(stats.values())
             
             # Сбор названий угроз
             threat_names = []
-            
-            # В analysis object результаты в 'results', в file object - 'last_analysis_results'
             results = attributes.get("last_analysis_results") or attributes.get("results") or {}
             
             for engine, result in results.items():
@@ -138,7 +145,7 @@ async def handle_document(message: types.Message):
             
             threat_summary = ", ".join(set(threat_names[:10]))
             
-            await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines} антивирусов считают этот файл опасным.\nСпрашиваю у ИИ, что это значит... 🤖")
+            await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines}. Анализирую... 🤖")
             
             # Генерация объяснения ИИ
             explanation = await ai_explainer.explain_threat(threat_summary)
@@ -148,7 +155,11 @@ async def handle_document(message: types.Message):
                 f"🚨 <b>Обнаружена угроза!</b> ({malicious_count}/{total_engines})\n\n"
                 f"{safe_explanation}"
             )
-            await status_msg.edit_text(final_text, parse_mode="HTML")
+            await status_msg.edit_text(
+                final_text, 
+                parse_mode="HTML",
+                reply_markup=builder.as_markup()
+            )
 
     except Exception as e:
         logger.error(f"Error handling file: {e}")
