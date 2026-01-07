@@ -4,8 +4,10 @@ import html
 import asyncio
 import secrets
 import string
+import base64
 from pathlib import Path
 from aiogram import Router, F, types
+from aiogram.filters import CommandObject, Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import TEMP_DIR, MAX_FILE_SIZE
@@ -37,15 +39,33 @@ def _build_temp_path(file_name: str) -> str:
     unique_prefix = secrets.token_hex(8)
     return str(Path(TEMP_DIR) / f"{unique_prefix}_{safe_name}")
 
-@router.message(F.text == "/start")
-async def cmd_start(message: types.Message):
+@router.message(Command("start"))
+async def cmd_start(message: types.Message, command: CommandObject):
     """
-    Приветственное сообщение.
+    Приветственное сообщение. Поддерживает Deep Linking для Inline-режима.
     """
+    args = command.args
+    if args:
+        # Обработка перехода из Inline-режима
+        try:
+            # Восстанавливаем паддинг base64
+            encoded_data = args[4:]
+            padding = '=' * (4 - len(encoded_data) % 4)
+            decoded_text = base64.urlsafe_b64decode(encoded_data + padding).decode()
+            
+            # Подменяем текст сообщения и вызываем обработчик анализа
+            from handlers.text_analysis import handle_text_analysis
+            message.text = decoded_text
+            await handle_text_analysis(message)
+            return
+        except Exception as e:
+            logger.error(f"Error decoding deep link args: {e}")
+
     await message.answer(
         "👋 Привет! Я — <b>PhishGuard</b>.\n\n"
         "Отправь мне подозрительный файл, и я проверю его по мировой базе антивирусов, "
-        "а затем объясню результаты простым языком.",
+        "а затем объясню результаты простым языком.\n\n"
+        "Также ты можешь переслать мне подозрительное сообщение или ссылку.",
         parse_mode="HTML"
     )
 
@@ -82,25 +102,24 @@ async def handle_document(message: types.Message):
         
         # 3. Проверка в VirusTotal
         vt_report = await vt_scanner.check_file(file_hash)
-        await db.increment_api_stats(vt=1) # +1 запрос
+        await db.increment_api_stats(vt=1)
         
         # Если отчет не найден, загружаем файл на сканирование
         if not vt_report:
             await status_msg.edit_text("ℹ️ Файл новый. Загружаю на сканирование в VirusTotal (это может занять время)... ⏳")
             
             analysis_id = await vt_scanner.upload_file(file_path)
-            await db.increment_api_stats(vt=1) # +1 запрос (upload)
+            await db.increment_api_stats(vt=1)
             
             if not analysis_id:
                 await status_msg.edit_text("❌ Ошибка при загрузке файла на сканирование.")
                 return
 
-            # Полллинг результатов (ждем завершения анализа)
-            max_retries = 20  # 20 * 3 сек = 1 минута ожидания (можно увеличить)
+            max_retries = 20
             for _ in range(max_retries):
-                await asyncio.sleep(3) # Ждем перед проверкой
+                await asyncio.sleep(3)
                 analysis_result = await vt_scanner.get_analysis(analysis_id)
-                await db.increment_api_stats(vt=1) # +1 запрос (polling)
+                await db.increment_api_stats(vt=1)
                 
                 if not analysis_result:
                     continue
@@ -119,30 +138,20 @@ async def handle_document(message: types.Message):
         stats = attributes.get("last_analysis_stats") or attributes.get("stats") or {}
         malicious_count = stats.get("malicious", 0)
         
-        # Обновляем статистику пользователя
         await db.update_action_stats(user_id, file=True, threat=(malicious_count > 0))
         
-        # Формируем ссылку на отчет
         report_link = f"https://www.virustotal.com/gui/file/{file_hash}"
-        
-        # Создаем кнопку
         builder = InlineKeyboardBuilder()
-        builder.row(types.InlineKeyboardButton(
-            text="🌐 Полный отчет (VirusTotal)", 
-            url=report_link
-        ))
+        builder.row(types.InlineKeyboardButton(text="🌐 Полный отчет (VirusTotal)", url=report_link))
 
         if malicious_count == 0:
             await status_msg.edit_text(
-                "✅ <b>Файл чист.</b> Угроз не найдено.\n\n"
-                "Вы можете посмотреть технический отчет по кнопке ниже.",
+                "✅ <b>Файл чист.</b> Угроз не найдено.",
                 parse_mode="HTML",
                 reply_markup=builder.as_markup()
             )
         else:
             total_engines = sum(stats.values())
-            
-            # Сбор названий угроз
             threat_names = []
             results = attributes.get("last_analysis_results") or attributes.get("results") or {}
             
@@ -151,29 +160,22 @@ async def handle_document(message: types.Message):
                     threat_names.append(result.get("result", "Unknown"))
             
             threat_summary = ", ".join(set(threat_names[:10]))
-            
             await status_msg.edit_text(f"⚠️ Найдено угроз: {malicious_count} из {total_engines}. Анализирую... 🤖")
             
-            # Генерация объяснения ИИ
             explanation = await ai_explainer.explain_threat(threat_summary)
-            await db.increment_api_stats(ai=1) # +1 запрос к AI
+            await db.increment_api_stats(ai=1)
             safe_explanation = html.escape(explanation)
             
             final_text = (
                 f"🚨 <b>Обнаружена угроза!</b> ({malicious_count}/{total_engines})\n\n"
                 f"{safe_explanation}"
             )
-            await status_msg.edit_text(
-                final_text, 
-                parse_mode="HTML",
-                reply_markup=builder.as_markup()
-            )
+            await status_msg.edit_text(final_text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     except Exception as e:
         logger.error(f"Error handling file: {e}")
         await status_msg.edit_text("Произошла ошибка при анализе файла.")
     finally:
-        # Очистка
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)

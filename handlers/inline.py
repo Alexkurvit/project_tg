@@ -28,48 +28,60 @@ async def handle_inline_query(inline_query: types.InlineQuery):
     
     if found_urls:
         url = found_urls[0]
+        # Кодируем URL в base64 (urlsafe), чтобы передать в параметре start
+        encoded_url = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
+        
         # Генерируем ID для результата
-        result_id = base64.urlsafe_b64encode(url.encode()).decode()[:64]
+        result_id = f"url_{encoded_url}"[:64]
         
         message_content = InputTextMessageContent(
-            message_text=f"🛡 <b>PhishGuard Check</b>\n\nПроверяю ссылку: {html.escape(url)}\n\n👇 Нажмите кнопку ниже для полного отчета.",
+            message_text=f"🛡 <b>PhishGuard Check</b>\n\nПроверяю ссылку: {html.escape(url)}\n\n👇 Нажмите кнопку ниже для получения вердикта ИИ.",
             parse_mode="HTML"
         )
         
+        # Кнопка с параметром start=url_...
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="🔎 Проверить в боте", url=f"https://t.me/phishing_guart_bot?start=check")]
+            [types.InlineKeyboardButton(
+                text="🔎 Получить результат", 
+                url=f"https://t.me/phishing_guart_bot?start=url_{encoded_url}"
+            )]
         ])
 
         item = InlineQueryResultArticle(
             id=result_id,
             title="🔍 Проверить ссылку",
-            description=f"Нажмите, чтобы проверить {url}",
+            description=f"Нажмите, чтобы проанализировать {url}",
             input_message_content=message_content,
             reply_markup=keyboard,
         )
         results.append(item)
     
-    # Всегда добавляем опцию "Проверить текст/Помощь", даже если ссылки нет
-    if not results:
-         results.append(InlineQueryResultArticle(
+    # Если это просто текст или пустой запрос
+    if not results and query_text:
+        # Кодируем текст (до 30 символов для безопасности длины URL)
+        encoded_text = base64.urlsafe_b64encode(query_text[:50].encode()).decode().strip("=")
+        
+        results.append(InlineQueryResultArticle(
             id="text_check",
             title="📝 Проверить текст",
-            description="Отправить текст на анализ",
+            description="Отправить этот текст на анализ ИИ",
             input_message_content=InputTextMessageContent(
-                message_text=f"🛡 <b>Анализ текста</b>\n\nТекст отправлен на проверку:\n<i>{html.escape(query_text[:100]) if query_text else 'Пустой запрос'}...</i>",
+                message_text=f"🛡 <b>Анализ текста</b>\n\nТекст отправлен на проверку:\n<i>{html.escape(query_text[:100])}...</i>",
                 parse_mode="HTML"
             ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                [types.InlineKeyboardButton(text="🔎 Анализировать", url=f"https://t.me/phishing_guart_bot?start=check")]
+                [types.InlineKeyboardButton(
+                    text="🔎 Анализировать", 
+                    url=f"https://t.me/phishing_guart_bot?start=txt_{encoded_text}"
+                )]
             ])
         ))
 
     try:
         await inline_query.answer(
             results=results,
-            cache_time=1, # Отключаем кэш для отладки
+            cache_time=5, 
             is_personal=True 
         )
-        logger.info("Inline query answered successfully")
     except Exception as e:
         logger.error(f"Error answering inline query: {e}")
